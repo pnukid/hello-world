@@ -1,0 +1,114 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Apr 12 21:02:59 2019
+
+@author: ILDO_KIM
+"""
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn import linear_model
+from sklearn.metrics import mean_squared_error
+import seaborn as sns
+
+# read excel data
+raw_data = pd.read_excel('Psup.xlsx')
+# delect NaN(null in spread sheet) data in 'Support Type' column
+raw_data = raw_data.dropna(subset=['Support Type'])
+
+""" sorting data and allocate new variable
+A proj = a_df
+B proj = b_df
+
+Remove dupulicate support member name and make new dataframe
+unique member property of A proj = a_df_mem
+unique member property of B proj = b_df_mem
+"""
+a_df = raw_data[raw_data['Project']=='A']
+b_df = raw_data[raw_data['Project']=='B']
+a_df_mem = a_df['Support Member'].unique()
+b_df_mem = b_df["Support Member"].unique()
+
+#union the property both A proj and B proj
+df_mem = np.union1d(a_df_mem, b_df_mem)
+#print (b_df.head(5),b_df.tail(5))
+print ('A', pd.DataFrame(a_df, columns = ['Project']).count())
+print ('B', pd.DataFrame(b_df, columns = ['Project']).count())
+
+#group-wise linear regression
+for typ, grp_data in b_df[['Support Member','Support Weight [kg]',\
+                           'Support Height [mm]']].groupby(b_df['Support Type']):
+    print(typ)
+    for mem, group_data in grp_data[['Support Weight [kg]', 'Support Height [mm]']]\
+    .groupby(grp_data['Support Member']):
+        print(mem)
+#        print(group_data.head(5))
+#        print(group_data.mean())
+#        print(group_data['Support Weight [kg]'].count())
+        X = pd.DataFrame(group_data, columns = ['Support Height [mm]'])
+#        print(X)
+        y = pd.DataFrame(group_data, columns = ['Support Weight [kg]'])
+#       print(y)
+        linear_regression = linear_model.LinearRegression()
+        linear_regression.fit(X=pd.DataFrame(X), y=y)
+        prediction = linear_regression.predict(X=pd.DataFrame(X))
+        print('a value =', linear_regression.intercept_)
+        print('b value =', linear_regression.coef_)
+        residuals = y-prediction
+        SSE = (residuals**2).sum()
+        SST = ((y-y.mean())**2).sum()
+        R_squared = 1 - (SSE/SST)
+        print('R_squared=', R_squared)
+#        print('score = ', linear_regression.score(X = pd.DataFrame(X), y = y))
+#        print('Mean_Squared_Error = ', mean_squared_error(prediction, y))
+#        print('RMSE = ', mean_squared_error(prediction, y)**0.5)
+
+for typ, grp_data in a_df.groupby(a_df['Support Type']):
+    print(typ)
+#    print(grp_data.head(5))
+    cnt = grp_data[(grp_data['Support Height [mm]']<500)].groupby(grp_data['Support Member']).count()
+    cnt0 = pd.DataFrame(cnt, columns = ['Support Height [mm]']).rename(columns = {'Support Height [mm]' : 'H<500'})
+    
+    cnt = grp_data[(grp_data['Support Height [mm]']>=500)&(grp_data['Support Height [mm]']<1000)].groupby(grp_data['Support Member']).count()
+    cnt1 = pd.DataFrame(cnt, columns = ['Support Height [mm]']).rename(columns = {'Support Height [mm]' : '500<=H<1000'})
+    
+    cnt = grp_data[(grp_data['Support Height [mm]']>=1000)&(grp_data['Support Height [mm]']<1500)].groupby(grp_data['Support Member']).count()
+    cnt2 = pd.DataFrame(cnt, columns = ['Support Height [mm]']).rename(columns = {'Support Height [mm]' : '1000<=H<1500'})
+    
+    cnt = grp_data[(grp_data['Support Height [mm]']>=1500)&(grp_data['Support Height [mm]']<2000)].groupby(grp_data['Support Member']).count()
+    cnt3 = pd.DataFrame(cnt, columns = ['Support Height [mm]']).rename(columns = {'Support Height [mm]' : '1500<=H<2000'})
+    
+    cnt = grp_data[(grp_data['Support Height [mm]']>=2000)&(grp_data['Support Height [mm]']<2500)].groupby(grp_data['Support Member']).count()
+    cnt4 = pd.DataFrame(cnt, columns = ['Support Height [mm]']).rename(columns = {'Support Height [mm]' : '2000<=H<2500'})
+    
+    cnt = grp_data[(grp_data['Support Height [mm]']>=2500)&(grp_data['Support Height [mm]']<3000)].groupby(grp_data['Support Member']).count()
+    cnt5 = pd.DataFrame(cnt, columns = ['Support Height [mm]']).rename(columns = {'Support Height [mm]' : '2500<=H<2000'})
+    
+    cnt = grp_data[(grp_data['Support Height [mm]']>=3000)].groupby(grp_data['Support Member']).count()
+    cnt5 = pd.DataFrame(cnt, columns = ['Support Height [mm]']).rename(columns = {'Support Height [mm]' : '3000<=H'})
+    
+    stat = pd.concat([cnt0, cnt1, cnt2, cnt3, cnt4, cnt5], axis=1, join='outer', sort=True)
+    stat = stat.fillna(0)
+    new = stat.reindex(df_mem, fill_value=0)
+    new = new.T
+    print(new)
+# pandas dataframe 숫자표현 format은 한자리로 표현하고, 소수 첫째자리 숫자만 표시하라
+    pd.options.display.float_format = '{:.0f}'.format
+    plt.figure(figsize=(6.4*1.9,4.8))
+# heatmap color map 설정 0일때 white
+    cmap = sns.cubehelix_palette(light=1, as_cmap=True)
+    sns.heatmap(new, annot=True, cmap=cmap, fmt='g', linewidths=.5, linecolor='lightgray')
+    sns.reset_orig()
+
+plt.figure(figsize=(6.4*2,4.8*2))
+plt.grid()
+plt.axis([0,8000,0,1000])
+plt.scatter(b_df['Support Height [mm]'], b_df['Support Weight [kg]'],\
+            color = 'black', marker='.')
+
+
+
+
+
+
