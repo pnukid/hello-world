@@ -103,7 +103,6 @@ plt.title(title, **title_font)
 plt.plot(an_data['delta K'], an_data['da/dN'], **plt_style)
 plt.xscale('log')
 plt.yscale('log')
-plt.legend(loc='lower right')
 
 ########
 #slicing data for curve fitting - excluding zero(0) data
@@ -118,7 +117,7 @@ newX = np.logspace(0, 3, base=10)  # Makes a nice domain for the fitted curves.
 def myExpFunc(x, a, b):
     return a * np.power(x, b)
 popt, pcov = curve_fit(myExpFunc, xdata, ydata)
-plt.plot(newX, myExpFunc(newX, *popt), 'k-')
+plt.plot(newX, myExpFunc(newX, *popt), 'k-', label='{:.2e}*$\Delta$K**{:.2f}'.format(*popt))
 print ("Exponential Fit: y = (a*(x**b))")
 print ("\ta = popt[0] = {0}\n\tb = popt[1] = {1}".format(*popt))
 ##########
@@ -129,7 +128,9 @@ calc_C = an_data.iloc[1, 2] / an_data.iloc[1, 6]**calc_m
 print(calc_m)
 print(calc_C)
 
-plt.plot(newX, myExpFunc(newX, calc_C, calc_m), 'b--')
+plt.plot(newX, myExpFunc(newX, calc_C, calc_m), 'b--', label='{:.2e}*$\Delta$K**{:.2f}'.format(calc_C, calc_m))
+
+plt.legend(fontsize=20, loc='lower right')
 
 # save a - N plot
 dadn_plt.savefig('dadn_plot.png', bbox_inches='tight')
