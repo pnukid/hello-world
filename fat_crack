@@ -1,0 +1,139 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Jun  9 20:55:04 2019
+
+@subject : Final report for mechnical behavior of material
+@identification number : 201674184
+@author: ILDO_KIM
+"""
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.font_manager as font_manager
+from scipy.optimize import curve_fit
+
+# read excel data
+an_data = pd.read_excel('data.xlsx')
+
+# basic data, unit is mm and kN
+b = 152.4
+t = 2.29
+pmin = 12.03
+pmax = 36.09
+ds = pmax - pmin
+
+# set up plot range
+n_max = max(an_data['N'])
+a_max = max(an_data['a'])
+
+# set up font dictionaries for plot title and axis title
+title_font = {'fontname':'Arial', 'size':'20', 'color':'black', 'weight':'normal',
+              'verticalalignment':'bottom'} # Bottom vertical alignment for more space
+axis_font = {'fontname':'Arial', 'size':'18'}
+
+# Set the font properties (for use in legend)   
+font_path = 'C:\Windows\Fonts\Arial.ttf'
+font_prop = font_manager.FontProperties(fname=font_path, size=14)
+
+# set up plot style for Test Data
+an_xlab = 'N, [Cycles]'
+an_ylab = 'a, Crack Length [mm]'
+an_title = 'Test Data, 2024-T3 Al'
+an_plt_style = {'color':'blue', 'linestyle':'-', 'marker':'x', 'mec':'red'}       
+an_plt = plt.figure(figsize=(6.4*2, 4.8*2))
+plt.grid()
+plt.axis([-0.01*n_max, 1.1*n_max, -0.01*a_max, 1.1*a_max])
+plt.xlabel(an_xlab, **axis_font)
+plt.ylabel(an_ylab, **axis_font)
+plt.title(an_title, **title_font)
+plt.plot(an_data['N'], an_data['a'], **an_plt_style)
+
+# save a - N plot
+an_plt.savefig('an_plot.png', bbox_inches='tight')
+
+#
+maxi = len(an_data['a'])
+
+# set up dummy data
+i = 0
+an_data['da/dN'] = 0
+an_data['a avg'] = 0
+an_data['alpha avg'] = 0
+an_data['F'] = 0
+an_data['delta K'] = 0
+an_data['log da/dN'] = 0
+an_data['log delta K'] = 0
+
+#calculate da/dN and delta K
+for i in range(maxi):
+    if i == 0:
+        continue
+    else:
+        #formula 11.11
+        an_data.iloc[i, 2] = (an_data.iloc[i, 0] - an_data.iloc[i-1, 0]) / (an_data.iloc[i, 1] - an_data.iloc[i-1, 1])
+        #formula 11.13
+        an_data.iloc[i, 3] = (an_data.iloc[i, 0] + an_data.iloc[i-1, 0]) / 2
+        aavg = an_data.iloc[i, 3]
+        #formula 11.14
+        an_data.iloc[i, 4] = an_data.iloc[i, 3] / b
+        al = an_data.iloc[i, 4]
+        #formula 8.12(a)
+        an_data.iloc[i, 5] = (1 - 0.5*al + 0.326*al*al)/np.sqrt(1 - al)
+        #formula 11.12
+        an_data.iloc[i, 6] = an_data.iloc[i, 5]*ds*1000*(np.sqrt(np.pi*aavg*0.001))/(2*b*t) 
+        # transform log10 scale for da/dN and delta K
+        an_data.iloc[i, 7] = np.log10(an_data.iloc[i,2])
+        an_data.iloc[i, 8] = np.log10(an_data.iloc[i,6])
+    
+    filename = 'dadN_deltaK'
+    an_data.to_excel('%s.xlsx' %filename)
+    
+# set up plot style for da/dN and delta K
+xlab = '$\Delta$K (MPa $\sqrt{m}$)'
+ylab = 'da/dN (m/cycle)'
+title = 'da/dN - $\Delta$K'
+plt_style = {'color':'red', 'linestyle':'', 'marker':'D', 'mec':'red', 'label':'Test Data'}
+dadn_plt = plt.figure(figsize=(6.4*2, 4.8*2))
+plt.xlim(10**0.6, 10**1.2)
+plt.ylim(10**-6, 10**-3)
+plt.xlabel(xlab, **axis_font)
+plt.ylabel(ylab, **axis_font)
+plt.title(title, **title_font)
+plt.plot(an_data['delta K'], an_data['da/dN'], **plt_style)
+plt.xscale('log')
+plt.yscale('log')
+plt.legend(loc='lower right')
+
+########
+#slicing data for curve fitting - excluding zero(0) data
+xdata = an_data.loc[1:, 'delta K']
+ydata = an_data.loc[1:, 'da/dN']
+
+newX = np.logspace(0, 3, base=10)  # Makes a nice domain for the fitted curves.
+                                   # Goes from 10^0 to 10^3
+                                   # This avoids the sorting and the swarm of lines.
+# Let's fit an exponential function.  
+# This looks like a line on a lof-log plot.
+def myExpFunc(x, a, b):
+    return a * np.power(x, b)
+popt, pcov = curve_fit(myExpFunc, xdata, ydata)
+plt.plot(newX, myExpFunc(newX, *popt), 'k-')
+print ("Exponential Fit: y = (a*(x**b))")
+print ("\ta = popt[0] = {0}\n\tb = popt[1] = {1}".format(*popt))
+##########
+
+# calculate m and C by using formula 11.10 and two end data
+calc_m = (an_data.iloc[1, 7] - an_data.iloc[maxi-1, 7]) / (an_data.iloc[1, 8] - an_data.iloc[maxi-1, 8])
+calc_C = an_data.iloc[1, 2] / an_data.iloc[1, 6]**calc_m
+print(calc_m)
+print(calc_C)
+
+plt.plot(newX, myExpFunc(newX, calc_C, calc_m), 'b--')
+
+# save a - N plot
+dadn_plt.savefig('dadn_plot.png', bbox_inches='tight')
+
+
+
+
