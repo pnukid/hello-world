@@ -11,6 +11,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
+from scipy.optimize import fsolve
+import scipy.integrate
 
 # read excel data
 an_data = pd.read_excel('data.xlsx')
@@ -153,11 +155,33 @@ dadn_plt.savefig('dadn_plot.png', bbox_inches='tight')
 # calc fatigue crack propagation
 # set up basic data, unit kN, mm
 
+ai = 50.0 # initial crack length, mm
 s0 = 353 # yield stress, MPa
 kIc = 34 # toughness, MPa*sqrt(m)
 
-a0 = b*(1-pmax*1000/(2*b*t*s0)) # calc length of plastic yield
-smax = pmax*1000/(2*b*t)
-F = 1 # assumed initial stress intensity factor
-ac = np.power(kIc/(F*smax), 2)/np.pi
-print(smax, ac)
+a0 = b*(1-pmax*1000/(2*b*t*s0)) # calc length of plastic yield, mm
+smax = pmax*1000/(2*b*t) # maximum stress, MPa
+# find crack length of brittle fracture
+myFunc = lambda af : kIc - (1 - 0.5*(af/b) + 0.326*np.power(af/b, 2)) * smax * np.sqrt(np.pi*af) / np.sqrt(1 - af/b)
+af_guess = ai / 1000 # function unit is m
+af_solv = fsolve(myFunc, af_guess)*1000 # unit in mm
+
+print('Crack length of plastic yield, a0 = %.1f mm' %a0)
+print('Crack length of brittle fracture, af = %.1f mm' %af_solv)
+
+ali = ai/b
+alf = af_solv/b
+fi = (1 - 0.5*ali + 0.36*ali**2) / np.sqrt(1-ali)
+ff = (1 - 0.5*alf + 0.36*alf**2) / np.sqrt(1-alf)
+print('Fi = %.2f and Ff = %.2f' %(fi, ff))
+
+al = lambda a: a/b
+funcF = lambda a: (1 - 0.5*al + 0.36*al**2) / np.sqrt(1-al)
+deltaK = lambda a: funcF * ds* np.sqrt(np.pi * a)
+func_dNda = lambda deltaK: 1/(C*deltaK**m)
+nif = scipy.integrate.quad(func_dNda, ai, af_solv)
+#print('Nif = %.0f' %nif)
+print(nif)
+x_a = np.arange(ai, af_solv)
+a_dNda_plt = plt.figure(figsize=(6.4*2, 4.8*2))
+plt.plot(x_a, func_dNda(x_a), 'r-')
