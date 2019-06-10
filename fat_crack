@@ -11,17 +11,16 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
-from scipy.optimize import curve_fit
 
 # read excel data
 an_data = pd.read_excel('data.xlsx')
 
 # basic data, unit is mm and kN
-b = 152.4
-t = 2.29
-pmin = 12.03
-pmax = 36.09
-ds = pmax - pmin
+b = 152.4 # width
+t = 2.29 # thickness
+pmin = 12.03 # min. force
+pmax = 36.09 # max. force
+ds = pmax - pmin # delta S
 
 # set up plot range
 n_max = max(an_data['N'])
@@ -87,7 +86,7 @@ for i in range(maxi):
         an_data.iloc[i, 8] = np.log10(an_data.iloc[i,6])
     
     filename = 'dadN_deltaK'
-    an_data.to_excel('%s.xlsx' %filename)
+    an_data.to_excel('%s.xlsx' %filename, sheet_name='dadN_calc')
     
 # set up plot style for da/dN and delta K
 xlab = '$\Delta$K (MPa $\sqrt{m}$)'
@@ -106,35 +105,59 @@ plt.yscale('log')
 
 ########
 #slicing data for curve fitting - excluding zero(0) data
-xdata = an_data.loc[1:, 'delta K']
-ydata = an_data.loc[1:, 'da/dN']
+data = an_data.drop(0)
+#print(data)
+xdata = np.array(data['delta K'])
+ydata = np.array(data['da/dN'])
 
-newX = np.logspace(0, 3, base=10)  # Makes a nice domain for the fitted curves.
+#print(xdata)
+
+#newX = np.logspace(0, 3, base=10)  # Makes a nice domain for the fitted curves.
                                    # Goes from 10^0 to 10^3
                                    # This avoids the sorting and the swarm of lines.
-# Let's fit an exponential function.  
-# This looks like a line on a lof-log plot.
+# fit an exponential function.  
+
 def myExpFunc(x, a, b):
     return a * np.power(x, b)
-popt, pcov = curve_fit(myExpFunc, xdata, ydata)
-plt.plot(newX, myExpFunc(newX, *popt), 'k-', label='{:.2e}*$\Delta$K**{:.2f}'.format(*popt))
+'''
+setbound = ((0, 0),(1, 4))
+popt, pcov = curve_fit(myExpFunc, xdata, ydata, bounds=setbound)
+plt.plot(xdata, myExpFunc(xdata, *popt), 'k-', label='{:.2e}*$\Delta$K^{:.2f}'.format(*popt))
 print ("Exponential Fit: y = (a*(x**b))")
 print ("\ta = popt[0] = {0}\n\tb = popt[1] = {1}".format(*popt))
-##########
+'''
+# fit linear fit on log log scale, best fit curve
+logX = np.log(xdata)
+logY = np.log(ydata)
+
+m, c = np.polyfit(logX, logY, 1)
+y_fit = np.exp(m*logX + c)
+C = np.exp(c)
+
+plt.plot(xdata, y_fit, 'k--', label='{:.2e}*$\Delta$K^{:.2f}'.format(C, m))
+print(m, C)
 
 # calculate m and C by using formula 11.10 and two end data
 calc_m = (an_data.iloc[1, 7] - an_data.iloc[maxi-1, 7]) / (an_data.iloc[1, 8] - an_data.iloc[maxi-1, 8])
 calc_C = an_data.iloc[1, 2] / an_data.iloc[1, 6]**calc_m
-print(calc_m)
-print(calc_C)
+print(calc_m, calc_C)
 
-plt.plot(newX, myExpFunc(newX, calc_C, calc_m), 'b--', label='{:.2e}*$\Delta$K**{:.2f}'.format(calc_C, calc_m))
+plt.plot(xdata, myExpFunc(xdata, calc_C, calc_m), 'b--', label='{:.2e}*$\Delta$K^{:.2f}'.format(calc_C, calc_m))
 
 plt.legend(fontsize=20, loc='lower right')
 
 # save a - N plot
 dadn_plt.savefig('dadn_plot.png', bbox_inches='tight')
 
+##################################################################
+# calc fatigue crack propagation
+# set up basic data, unit kN, mm
 
+s0 = 353 # yield stress, MPa
+kIc = 34 # toughness, MPa*sqrt(m)
 
-
+a0 = b*(1-pmax*1000/(2*b*t*s0)) # calc length of plastic yield
+smax = pmax*1000/(2*b*t)
+F = 1 # assumed initial stress intensity factor
+ac = np.power(kIc/(F*smax), 2)/np.pi
+print(smax, ac)
