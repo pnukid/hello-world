@@ -12,6 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
 from scipy.optimize import fsolve
+from scipy.optimize import newton
 import scipy.integrate
 
 # read excel data
@@ -136,7 +137,7 @@ m, c = np.polyfit(logX, logY, 1)
 y_fit = np.exp(m*logX + c)
 C = np.exp(c)
 
-plt.plot(xdata, y_fit, 'k--', label='{:.2e}*$\Delta$K^{:.2f}'.format(C, m))
+plt.plot(xdata, y_fit, 'k--', label='Curve fitting(by all data) {:.2e}*$\Delta$K^{:.2f}'.format(C, m))
 print(m, C)
 
 # calculate m and C by using formula 11.10 and two end data
@@ -144,9 +145,9 @@ calc_m = (an_data.iloc[1, 7] - an_data.iloc[maxi-1, 7]) / (an_data.iloc[1, 8] - 
 calc_C = an_data.iloc[1, 2] / an_data.iloc[1, 6]**calc_m
 print(calc_m, calc_C)
 
-plt.plot(xdata, myExpFunc(xdata, calc_C, calc_m), 'b--', label='{:.2e}*$\Delta$K^{:.2f}'.format(calc_C, calc_m))
+plt.plot(xdata, myExpFunc(xdata, calc_C, calc_m), 'b--', label='Curve fitting(two end data) {:.2e}*$\Delta$K^{:.2f}'.format(calc_C, calc_m))
 
-plt.legend(fontsize=20, loc='lower right')
+plt.legend(fontsize=15, loc='lower right')
 
 # save a - N plot
 dadn_plt.savefig('dadn_plot.png', bbox_inches='tight')
@@ -155,16 +156,22 @@ dadn_plt.savefig('dadn_plot.png', bbox_inches='tight')
 # calc fatigue crack propagation
 # set up basic data, unit kN, mm
 
-ai = 50.0 # initial crack length, mm
+ai = 5.08 # initial crack length, mm
 s0 = 353 # yield stress, MPa
 kIc = 34 # toughness, MPa*sqrt(m)
 
 a0 = b*(1-pmax*1000/(2*b*t*s0)) # calc length of plastic yield, mm
 smax = pmax*1000/(2*b*t) # maximum stress, MPa
 # find crack length of brittle fracture
-myFunc = lambda af : kIc - (1 - 0.5*(af/b) + 0.326*np.power(af/b, 2)) * smax * np.sqrt(np.pi*af) / np.sqrt(1 - af/b)
+
+bb = b / 1000
+def myFunc(af):
+    return kIc - (1 - 0.5*(af/bb) + 0.326*np.power(af/bb, 2)) * smax * np.sqrt(np.pi*af) / np.sqrt(1 - af/bb)
+
+af_solv = newton(myFunc, 0)*1000 # unit in mm
+
 af_guess = ai / 1000 # function unit is m
-af_solv = fsolve(myFunc, af_guess)*1000 # unit in mm
+#af_solv = fsolve(myFunc, af_guess)*1000 # unit in mm
 
 print('Crack length of plastic yield, a0 = %.1f mm' %a0)
 print('Crack length of brittle fracture, af = %.1f mm' %af_solv)
@@ -175,13 +182,33 @@ fi = (1 - 0.5*ali + 0.36*ali**2) / np.sqrt(1-ali)
 ff = (1 - 0.5*alf + 0.36*alf**2) / np.sqrt(1-alf)
 print('Fi = %.2f and Ff = %.2f' %(fi, ff))
 
-al = lambda a: a/b
-funcF = lambda a: (1 - 0.5*al + 0.36*al**2) / np.sqrt(1-al)
-deltaK = lambda a: funcF * ds* np.sqrt(np.pi * a)
-func_dNda = lambda deltaK: 1/(C*deltaK**m)
-nif = scipy.integrate.quad(func_dNda, ai, af_solv)
-#print('Nif = %.0f' %nif)
+def al(a):
+    return a/b
+def funcF(al):
+    return (1 - 0.5*al + 0.36*al**2) / np.sqrt(1-al)
+def deltaK(x):
+    return (1 - 0.5*(x/b) + 0.326*np.power(x/b, 2)) * smax * np.sqrt(np.pi*x) / np.sqrt(1 - x/b)
+def dNda(deltaK):
+    return 1/(C*deltaK**m)
+
+nif = scipy.integrate.quad(dNda, ai, af_solv)
 print(nif)
-x_a = np.arange(ai, af_solv)
+
+x_a = np.arange(ai, af_solv) # set x range from initial crack length to fracture length
+
+# set up plot style for da/dN and delta K
 a_dNda_plt = plt.figure(figsize=(6.4*2, 4.8*2))
-plt.plot(x_a, func_dNda(x_a), 'r-')
+dNda_xlab = ' a, Crack Length [mm]'
+dNda_ylab = 'dN/da [cycle/mm]'
+dNda_title = 'dN/da - a'
+dNda_step = (af_solv-ai)/20
+plt.xlabel(dNda_xlab, **axis_font)
+plt.ylabel(dNda_ylab, **axis_font)
+plt.title(dNda_title, **title_font)
+plt.xticks((ai, af_solv), ('ai, %.0f'%ai, 'af, %.0f'%af_solv))
+plt.plot(x_a, dNda(x_a), 'r-')
+textstr = 'Initial crack length = %.2f mm \n Crack length of brittle fracture = %.2f mm \n Remaining cycle = %.0f cycle'%(ai, af_solv, nif[0])
+xloc_txt = ai + 0.5*(af_solv - ai)
+yloc_txt = 0.5*dNda(ai)
+plt.text(xloc_txt, yloc_txt, textstr)
+a_dNda_plt.savefig('a_dNda_plot.png', bbox_inches='tight')
